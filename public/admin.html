@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://unpkg.com/vue@3"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="app">
+
+<h2>Gestion de stock</h2>
+
+<div v-for="p in products" class="admin-item">
+  {{ p.name }} - {{ p.price }}€
+
+  Stock:
+  <input type="number" v-model="p.stock" @change="update(p)">
+
+  Rupture:
+  <input type="checkbox" v-model="p.out_of_stock" @change="update(p)">
+
+  <button @click="del(p.id)">❌</button>
+</div>
+
+<hr>
+
+<input v-model="name" placeholder="Nom">
+<input v-model="price" placeholder="Prix">
+<button @click="add">Ajouter</button>
+
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+data() {
+  return {
+    products: [],
+    name:"",
+    price:"",
+    pwd: new URLSearchParams(window.location.search).get("pwd")
+  }
+},
+
+methods: {
+  async load() {
+    this.products = await (await fetch("/products")).json();
+  },
+
+  async update(p) {
+    await fetch("/products/"+p.id,{
+      method:"PUT",
+      headers:{
+        "Content-Type":"application/json",
+        "x-admin-password":this.pwd
+      },
+      body:JSON.stringify(p)
+    });
+  },
+
+  async del(id) {
+    await fetch("/products/"+id,{
+      method:"DELETE",
+      headers:{ "x-admin-password":this.pwd }
+    });
+    this.load();
+  },
+
+  async add() {
+    await fetch("/products",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-admin-password":this.pwd
+      },
+      body:JSON.stringify({name:this.name,price:this.price})
+    });
+    this.name=""; this.price="";
+    this.load();
+  }
+},
+
+mounted(){ this.load(); }
+
+}).mount("#app");
+</script>
+
+</body>
+</html>
