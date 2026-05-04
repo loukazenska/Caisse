@@ -7,16 +7,11 @@
   },
   "dependencies": {
     "cors": "^2.8.6",
-    "express": "^4.22.1",
+    "express": "^4.21.1",
     "sqlite3": "^6.0.1"
   },
-  "description": "",
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": "20.x"
+  },
   "type": "commonjs"
-}
-
-"engines": {
-  "node": "20.x"
 }
