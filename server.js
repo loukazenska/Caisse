@@ -1,6 +1,7 @@
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
+
 const ADMIN_PASSWORD = "Louka45";
 
 const app = express();
@@ -8,7 +9,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-const db = new sqlite3.Database("./db.sqlite");
+// DB
+const db = new sqlite3.Database("./db.sqlite", (err) => {
+  if (err) {
+    console.error("❌ DB ERROR:", err);
+  } else {
+    console.log("✅ DB connected");
+  }
+});
 
 // Tables
 db.serialize(() => {
@@ -29,90 +37,63 @@ db.serialize(() => {
   )`);
 });
 
-// API produits
+// ===== API =====
+
+// GET produits
 app.get("/products", (req, res) => {
   db.all("SELECT * FROM products", (err, rows) => {
+    if (err) return res.status(500).send(err);
     res.json(rows);
   });
 });
 
+// ADD produit
 app.post("/products", (req, res) => {
   const password = req.headers["x-admin-password"];
+  if (password !== ADMIN_PASSWORD) return res.sendStatus(403);
 
-  if (password !== ADMIN_PASSWORD) {
-    return res.sendStatus(403);
-  }
-
-  const { name, price, image } = req.body;
+  const { name, price, stock = 0 } = req.body;
 
   db.run(
-    "INSERT INTO products (name, price, image) VALUES (?, ?, ?)",
-    [name, price, image],
-    () => res.sendStatus(200)
+    "INSERT INTO products (name, price, stock) VALUES (?, ?, ?)",
+    [name, price, stock],
+    (err) => {
+      if (err) return res.status(500).send(err);
+      res.sendStatus(200);
+    }
   );
 });
 
-// API ventes
-app.post("/sales", (req, res) => {
-  const { total, payment, items } = req.body;
+// UPDATE produit (UNE SEULE VERSION)
+app.put("/products/:id", (req, res) => {
+  const password = req.headers["x-admin-password"];
+  if (password !== ADMIN_PASSWORD) return res.sendStatus(403);
 
-  db.serialize(() => {
+  const { name, price, stock, out_of_stock } = req.body;
 
-    // enregistrer la vente
-    db.run(
-      "INSERT INTO sales (total, payment) VALUES (?, ?)",
-      [total, payment]
-    );
-
-    // mettre à jour les stocks
-    items.forEach(item => {
-      db.get("SELECT stock, out_of_stock FROM products WHERE id = ?", [item.id], (err, row) => {
-
-        if (!row) return;
-
-        // si rupture forcée → on touche pas
-        if (row.out_of_stock === 1) return;
-
-        const newStock = row.stock - item.qty;
-
-        db.run(
-          "UPDATE products SET stock = ?, out_of_stock = ? WHERE id = ?",
-          [
-            newStock,
-            newStock <= 0 ? 1 : 0,
-            item.id
-          ]
-        );
-
-      });
-    });
-
-  });
-
-  res.sendStatus(200);
+  db.run(
+    `UPDATE products SET name=?, price=?, stock=?, out_of_stock=? WHERE id=?`,
+    [name, price, stock, out_of_stock ? 1 : 0, req.params.id],
+    (err) => {
+      if (err) return res.status(500).send(err);
+      res.sendStatus(200);
+    }
+  );
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
-
+// DELETE produit
 app.delete("/products/:id", (req, res) => {
   const password = req.headers["x-admin-password"];
-
-  if (password !== ADMIN_PASSWORD) {
-    return res.sendStatus(403);
-  }
+  if (password !== ADMIN_PASSWORD) return res.sendStatus(403);
 
   db.run("DELETE FROM products WHERE id = ?", [req.params.id], () => {
     res.sendStatus(200);
   });
 });
 
+// LOGIN admin
 app.post("/admin/login", (req, res) => {
   const { password } = req.body;
-
   if (password === ADMIN_PASSWORD) {
     res.json({ success: true });
   } else {
@@ -120,45 +101,38 @@ app.post("/admin/login", (req, res) => {
   }
 });
 
-app.put("/products/:id", (req, res) => {
-  const password = req.headers["x-admin-password"];
-
-  if (password !== ADMIN_PASSWORD) {
-    return res.sendStatus(403);
-  }
-
-  const { name, price, stock, out_of_stock } = req.body;
+// SALES
+app.post("/sales", (req, res) => {
+  const { total, payment, items } = req.body;
 
   db.run(
-    `UPDATE products 
-     SET name=?, price=?, stock=?, out_of_stock=? 
-     WHERE id=?`,
-    [name, price, stock, out_of_stock ? 1 : 0, req.params.id],
-    () => res.sendStatus(200)
+    "INSERT INTO sales (total, payment) VALUES (?, ?)",
+    [total, payment]
   );
-});
 
-app.put("/products/:id", (req, res) => {
-  const password = req.headers["x-admin-password"];
+  items.forEach(item => {
+    db.get(
+      "SELECT stock, out_of_stock FROM products WHERE id = ?",
+      [item.id],
+      (err, row) => {
+        if (!row || row.out_of_stock === 1) return;
 
-  if (password !== ADMIN_PASSWORD) {
-    return res.sendStatus(403);
-  }
+        const newStock = row.stock - item.qty;
 
-  const { name, price, stock, out_of_stock } = req.body;
-
-  db.run(
-    `UPDATE products 
-     SET name=?, price=?, stock=?, out_of_stock=? 
-     WHERE id=?`,
-    [name, price, stock, out_of_stock ? 1 : 0, req.params.id],
-    (err) => {
-      if (err) {
-        console.error(err);
-        return res.sendStatus(500);
+        db.run(
+          "UPDATE products SET stock=?, out_of_stock=? WHERE id=?",
+          [newStock, newStock <= 0 ? 1 : 0, item.id]
+        );
       }
-      res.sendStatus(200);
-    }
-  );
+    );
+  });
+
+  res.sendStatus(200);
 });
 
+// ===== START =====
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Server running on port " + PORT);
+});
