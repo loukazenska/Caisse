@@ -6,23 +6,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="style.css">
-  <script src="https://unpkg.com/vue@3"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="manifest" href="/manifest.json">
 </head>
 
 <body>
-
 <div id="app">
 
   <!-- HEADER -->
   <div class="header">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      
-      <div>
+    <div class="header-inner">
+
+      <div class="header-left">
         <img src="logo.png" class="logo">
+      </div>
+
+      <div class="header-title">
         Septors - Caisse Buvette
       </div>
 
-      <!-- ⚙️ MENU -->
       <div class="gear-container" ref="menuContainer">
         <div class="gear" @click="toggleMenu">⚙️</div>
 
@@ -40,72 +42,103 @@
 
     <!-- PRODUITS -->
     <div class="products">
-
       <div v-for="p in products"
            class="product"
-           :class="{ out: p.out_of_stock }"
+           :class="{ out: p.out_of_stock || p.stock <= 0 }"
            @click="addToCart(p)">
 
-        <h3>{{ p.name }}</h3>
+        <h3>{{ getIcon(p.category) }} {{ p.name }}</h3>
         <p>{{ p.price }} €</p>
         <div class="stock">Stock : {{ p.stock }}</div>
 
-        <!-- quantité -->
         <div class="qty" v-if="cartItem(p)">
           x{{ cartItem(p).qty }}
         </div>
-
       </div>
-
     </div>
 
     <!-- PANIER -->
     <div class="cart">
 
-      <!-- HEADER PANIER -->
       <div class="cart-header">
         <h2>Panier</h2>
 
         <button v-if="cart.length > 0"
                 class="edit-btn"
                 @click="editMode = !editMode">
-          {{ editMode ? "✔️ Terminer" : "✏️ Modifier" }}
+          {{ editMode ? "✔️" : "✏️" }}
         </button>
       </div>
 
-      <!-- ITEMS -->
-      <div v-for="item in cart" class="cart-item">
+      <!-- LISTE -->
+      <div class="cart-items">
+        <div v-for="item in cart" class="cart-item">
 
-        <div>{{ item.name }}</div>
+          <div>{{ item.name }}</div>
 
-        <div class="cart-controls">
+          <div class="cart-controls">
+            <button v-if="editMode" @click="removeFromCart(item)">➖</button>
+            <span>x{{ item.qty }}</span>
+            <button v-if="editMode" @click="addToCart(item)">➕</button>
+          </div>
 
-          <button v-if="editMode" @click="removeFromCart(item)">➖</button>
-
-          <span>x{{ item.qty }}</span>
-
-          <button v-if="editMode" @click="addToCart(item)">➕</button>
+          <span>{{ (item.price * item.qty).toFixed(2) }} €</span>
 
         </div>
+      </div>
 
-        <span>{{ (item.price * item.qty).toFixed(2) }} €</span>
+      <!-- FOOTER -->
+      <div class="cart-footer">
+
+        <!-- ancien prix -->
+        <div v-if="discount" class="old-total">
+          <s>{{ originalTotal }} €</s>
+        </div>
+
+        <div class="total">Total : {{ total }} €</div>
+
+        <button v-if="cart.length > 0"
+                class="clear"
+                @click="clearCart">
+          🗑️ Vider le panier
+        </button>
+
+        <!-- REMISE -->
+        <button class="discount"
+                :class="{ active: discount }"
+                @click="toggleDiscount">
+          🏷️ -10%
+        </button>
+
+        <button class="card" @click="pay('card')">💳 Carte</button>
+
+        <!-- ESPÈCES -->
+        <button v-if="!showCashInput"
+                class="cash"
+                @click="payCash">
+          💵 Espèces
+        </button>
+
+        <div v-else class="cash-input-box">
+          <input
+            v-model.number="cashAmount"
+            type="number"
+            inputmode="numeric"
+            placeholder="Montant reçu"
+            autofocus
+          />
+          <button @click="confirmCash">OK</button>
+          <button @click="cancelCash">❌</button>
+        </div>
 
       </div>
 
-      <!-- TOTAL -->
-      <div class="total">
-        Total : {{ total }} €
-      </div>
-
-      <button class="card" @click="pay('card')">💳 Carte</button>
-      <button class="cash" @click="payCash">💵 Espèces</button>
     </div>
 
   </div>
 </div>
 
 <script>
-  
 const { createApp } = Vue;
 
 createApp({
@@ -114,66 +147,85 @@ createApp({
       products: [],
       cart: [],
       showMenu: false,
-      editMode: false
+      editMode: false,
+      showCashInput: false,
+      cashAmount: null,
+      discount: false
     }
   },
 
   computed: {
+
+    originalTotal() {
+      return this.cart.reduce((s, i) => s + i.price * i.qty, 0).toFixed(2);
+    },
+
     total() {
-      return this.cart.reduce((sum, item) => sum + item.price * item.qty, 0).toFixed(2);
+      let t = this.cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+      if (this.discount) {
+        t = t * 0.9;
+      }
+
+      return t.toFixed(2);
     }
+
   },
 
   methods: {
+
     async loadProducts() {
       const res = await fetch("/products");
       this.products = await res.json();
     },
 
-    refreshPage() {
-      location.reload();
-    },
-
-    cartItem(product) {
-      return this.cart.find(c => c.id === product.id);
-    },
-
-    addToCart(product) {
-      if (product.out_of_stock) {
-        alert("Produit en rupture ❌");
-        return;
-      }
-
-      const existing = this.cart.find(p => p.id === product.id);
-
-      if (existing) {
-        existing.qty++;
-      } else {
-        this.cart.push({ ...product, qty: 1 });
+    getIcon(cat){
+      switch(cat){
+        case "drink": return "🥤";
+        case "food": return "🍔";
+        case "candy": return "🍬";
+        case "snack": return "🥨";
+        default: return "📦";
       }
     },
 
-    removeFromCart(product) {
-      const existing = this.cart.find(p => p.id === product.id);
-      if (!existing) return;
+    toggleDiscount(){
+      this.discount = !this.discount;
+    },
 
-      existing.qty--;
+    cartItem(p) {
+      return this.cart.find(c => c.id === p.id);
+    },
 
-      if (existing.qty <= 0) {
-        this.cart = this.cart.filter(p => p.id !== product.id);
+    clearCart() {
+      if (!confirm("Vider le panier ?")) return;
+      this.cart = [];
+      this.discount = false;
+    },
+
+    addToCart(p) {
+      if (p.out_of_stock || p.stock <= 0) return;
+
+      const e = this.cart.find(i => i.id === p.id);
+      e ? e.qty++ : this.cart.push({ ...p, qty: 1 });
+    },
+
+    removeFromCart(p) {
+      const e = this.cart.find(i => i.id === p.id);
+      if (!e) return;
+
+      e.qty--;
+      if (e.qty <= 0) {
+        this.cart = this.cart.filter(i => i.id !== p.id);
       }
     },
 
     async pay(type) {
-      if (this.cart.length === 0) return;
+      if (!this.cart.length) return;
 
-      // 👉 confirmation uniquement pour carte
-      if (type === "card") {
-        const ok = confirm("Paiement CB effectué ?");
-        if (!ok) return;
-      }
+      if (type === "card" && !confirm("Paiement CB effectué ?")) return;
 
-      await fetch("/sales", {
+      const res = await fetch("/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -183,58 +235,88 @@ createApp({
         })
       });
 
-  alert("Paiement validé !");
-  this.cart = [];
-  location.reload();
-},
+      if (!res.ok) {
+        const data = await res.json();
+        alert("⚠️ " + data.error);
+
+        await this.loadProducts();
+
+        this.cart = this.cart.map(item => {
+          const real = this.products.find(p => p.id === item.id);
+          if (!real) return null;
+
+          if (item.qty > real.stock) {
+            return { ...item, qty: real.stock };
+          }
+
+          return item;
+        }).filter(i => i && i.qty > 0);
+
+        return;
+      }
+
+      this.cart = [];
+      this.discount = false;
+      location.reload();
+    },
 
     payCash() {
-      const amount = prompt("Montant donné ?");
-      if (!amount) return;
+      this.showCashInput = true;
+    },
 
-      const change = amount - this.total;
-      alert("Rendu : " + change.toFixed(2) + " €");
+    async confirmCash() {
+      if (!this.cashAmount) return;
+
+      alert("Rendu : " + (this.cashAmount - this.total).toFixed(2) + " €");
+
+      this.showCashInput = false;
+      this.cashAmount = null;
 
       this.pay("cash");
     },
 
-    toggleMenu(event) {
-      event.stopPropagation();
+    cancelCash() {
+      this.showCashInput = false;
+      this.cashAmount = null;
+    },
+
+    refreshPage() {
+      location.reload();
+    },
+
+    toggleMenu(e) {
+      e.stopPropagation();
       this.showMenu = !this.showMenu;
     },
 
-    handleClickOutside(event) {
-      const menu = this.$refs.menuContainer;
-      if (menu && !menu.contains(event.target)) {
+    handleClickOutside(e) {
+      if (!this.$refs.menuContainer.contains(e.target)) {
         this.showMenu = false;
       }
     },
 
     async goConfig() {
-      const password = prompt("Mot de passe admin ?");
-      if (!password) return;
+      const pwd = prompt("Mot de passe admin ?");
+      if (!pwd) return;
 
       const res = await fetch("/admin/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password })
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ password: pwd })
       });
 
       if (res.ok) {
-        window.location.href = "/admin.html?pwd=" + password;
+        window.location.href = "/admin.html?pwd=" + pwd;
       } else {
         alert("Mot de passe incorrect");
       }
     }
+
   },
 
   mounted() {
     this.loadProducts();
     document.addEventListener("click", this.handleClickOutside);
-  },
-
-  unmounted() {
-    document.removeEventListener("click", this.handleClickOutside);
   }
 
 }).mount("#app");
