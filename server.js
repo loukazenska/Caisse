@@ -1,5 +1,5 @@
+const Database = require("better-sqlite3");
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
 
 const ADMIN_PASSWORD = "Louka45";
@@ -10,41 +10,33 @@ app.use(express.json());
 app.use(express.static("public"));
 
 // DB
-const db = new sqlite3.Database("./db.sqlite", (err) => {
-  if (err) {
-    console.error("❌ DB ERROR:", err);
-  } else {
-    console.log("✅ DB connected");
-  }
-});
+const db = new Database("db.sqlite");
 
-// Tables
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS products (
+// ===== TABLES =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY,
     name TEXT,
     price REAL,
     image TEXT,
     stock INTEGER DEFAULT 0,
     out_of_stock INTEGER DEFAULT 0
-  )`);
+  );
 
-  db.run(`CREATE TABLE IF NOT EXISTS sales (
+  CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY,
     total REAL,
     payment TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-});
+  );
+`);
 
 // ===== API =====
 
 // GET produits
 app.get("/products", (req, res) => {
-  db.all("SELECT * FROM products", (err, rows) => {
-    if (err) return res.status(500).send(err);
-    res.json(rows);
-  });
+  const rows = db.prepare("SELECT * FROM products").all();
+  res.json(rows);
 });
 
 // ADD produit
@@ -54,31 +46,27 @@ app.post("/products", (req, res) => {
 
   const { name, price, stock = 0 } = req.body;
 
-  db.run(
-    "INSERT INTO products (name, price, stock) VALUES (?, ?, ?)",
-    [name, price, stock],
-    (err) => {
-      if (err) return res.status(500).send(err);
-      res.sendStatus(200);
-    }
-  );
+  db.prepare(
+    "INSERT INTO products (name, price, stock) VALUES (?, ?, ?)"
+  ).run(name, price, stock);
+
+  res.sendStatus(200);
 });
 
-// UPDATE produit (UNE SEULE VERSION)
+// UPDATE produit
 app.put("/products/:id", (req, res) => {
   const password = req.headers["x-admin-password"];
   if (password !== ADMIN_PASSWORD) return res.sendStatus(403);
 
   const { name, price, stock, out_of_stock } = req.body;
 
-  db.run(
-    `UPDATE products SET name=?, price=?, stock=?, out_of_stock=? WHERE id=?`,
-    [name, price, stock, out_of_stock ? 1 : 0, req.params.id],
-    (err) => {
-      if (err) return res.status(500).send(err);
-      res.sendStatus(200);
-    }
-  );
+  db.prepare(`
+    UPDATE products 
+    SET name=?, price=?, stock=?, out_of_stock=? 
+    WHERE id=?
+  `).run(name, price, stock, out_of_stock ? 1 : 0, req.params.id);
+
+  res.sendStatus(200);
 });
 
 // DELETE produit
@@ -86,14 +74,14 @@ app.delete("/products/:id", (req, res) => {
   const password = req.headers["x-admin-password"];
   if (password !== ADMIN_PASSWORD) return res.sendStatus(403);
 
-  db.run("DELETE FROM products WHERE id = ?", [req.params.id], () => {
-    res.sendStatus(200);
-  });
+  db.prepare("DELETE FROM products WHERE id = ?").run(req.params.id);
+  res.sendStatus(200);
 });
 
-// LOGIN admin
+// LOGIN
 app.post("/admin/login", (req, res) => {
   const { password } = req.body;
+
   if (password === ADMIN_PASSWORD) {
     res.json({ success: true });
   } else {
@@ -105,25 +93,28 @@ app.post("/admin/login", (req, res) => {
 app.post("/sales", (req, res) => {
   const { total, payment, items } = req.body;
 
-  db.run(
-    "INSERT INTO sales (total, payment) VALUES (?, ?)",
-    [total, payment]
+  // insert vente
+  db.prepare(
+    "INSERT INTO sales (total, payment) VALUES (?, ?)"
+  ).run(total, payment);
+
+  // update stock
+  const getProduct = db.prepare("SELECT stock, out_of_stock FROM products WHERE id = ?");
+  const updateStock = db.prepare(
+    "UPDATE products SET stock=?, out_of_stock=? WHERE id=?"
   );
 
   items.forEach(item => {
-    db.get(
-      "SELECT stock, out_of_stock FROM products WHERE id = ?",
-      [item.id],
-      (err, row) => {
-        if (!row || row.out_of_stock === 1) return;
+    const row = getProduct.get(item.id);
 
-        const newStock = row.stock - item.qty;
+    if (!row || row.out_of_stock === 1) return;
 
-        db.run(
-          "UPDATE products SET stock=?, out_of_stock=? WHERE id=?",
-          [newStock, newStock <= 0 ? 1 : 0, item.id]
-        );
-      }
+    const newStock = row.stock - item.qty;
+
+    updateStock.run(
+      newStock,
+      newStock <= 0 ? 1 : 0,
+      item.id
     );
   });
 
