@@ -374,21 +374,20 @@ button {
 
 /* ===== ACTIONS BAS ===== */
 .admin-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  max-width: 600px;
-  margin: auto;
-  display: flex;
-  gap: 10px;
-  padding: 12px;
-  background: #0b1f3a;
-  border-top: 2px solid #1e5bb8;
+  flex-wrap: wrap;
 }
 
 .admin-actions button {
-  white-space: nowrap;
+  flex: 1 1 calc(50% - 5px);
+  font-size: 14px;
+  padding: 10px;
+}
+
+/* très petit écran (iPhone) */
+@media (max-width: 400px) {
+  .admin-actions button {
+    flex: 1 1 100%;
+  }
 }
 
 .save-all {
