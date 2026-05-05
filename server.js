@@ -19,7 +19,7 @@ let sessionStats = {
 };
 
 // ===== DB =====
-const db = new Database("db.sqlite");
+const db = new Database("/data/db.sqlite");
 
 // ===== TABLES =====
 db.exec(`
