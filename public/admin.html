@@ -80,18 +80,20 @@
   </div>
 
   <div class="admin-actions">
-    <button class="save-all" @click="saveAll">💾 Sauvegarder</button>
-    <button class="refresh" @click="loadProducts">🔄 Rafraîchir</button>
+  <button class="save-all" @click="saveAll">💾 Sauvegarder</button>
+  <button class="refresh" @click="loadProducts">🔄 Rafraîchir</button>
 
-    <button class="session-btn"
-            :class="{ active: sessionActive }"
-            @click="toggleSession">
+  <button class="session-btn"
+          :class="{ active: sessionActive }"
+          @click="toggleSession">
 
-      {{ sessionActive ? "⏹ Stop caisse" : "▶️ Lancer caisse" }}
+    {{ sessionActive ? "⏹ Stop caisse" : "▶️ Lancer caisse" }}
 
-    </button>
-  </div>
+  </button>
 
+  <button @click="downloadReport">
+    📄 Télécharger
+  </button>
 </div>
 
 </div>
