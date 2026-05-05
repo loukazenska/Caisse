@@ -113,6 +113,10 @@ data(){
 
 methods:{
 
+downloadReport(){
+  window.location.href = "/session/export";
+},
+  
 async getSessionStatus(){
   const res = await fetch("/session/status");
   const data = await res.json();
