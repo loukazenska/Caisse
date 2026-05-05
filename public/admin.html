@@ -133,18 +133,7 @@ async toggleSession(){
 
     this.sessionActive = false;
 
-    // 🔥 téléchargement automatique
-    const blob = new Blob([data.content], { type: "text/plain" });
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "rapport_caisse.txt";
-    a.click();
-
-    window.URL.revokeObjectURL(url);
-
-    alert("📄 Rapport téléchargé");
+    alert("📄 Session terminée\nFichier: " + data.file);
   }
 
 },
