@@ -373,21 +373,56 @@ button {
 }
 
 /* ===== ACTIONS BAS ===== */
+
+
 .admin-actions {
-  flex-wrap: wrap;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 600px;
+  margin: auto;
+
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+
+  background: #0b1f3a;
+  border-top: 2px solid #1e5bb8;
+
+  overflow-x: auto; /* 🔥 FIX IPHONE */
+}
+
+/* scroll invisible propre */
+.admin-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-actions button {
-  flex: 1 1 calc(50% - 5px);
+  flex: 0 0 auto; /* 🔥 empêche de casser la ligne */
+  white-space: nowrap;
   font-size: 14px;
-  padding: 10px;
+  padding: 10px 12px;
 }
 
-/* très petit écran (iPhone) */
-@media (max-width: 400px) {
-  .admin-actions button {
-    flex: 1 1 100%;
-  }
+/* couleurs boutons */
+.save-all {
+  background: #4da3ff;
+  color: black;
+}
+
+.refresh {
+  background: #1e5bb8;
+  color: white;
+}
+
+.session-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.session-btn.active {
+  background: #f44336;
 }
 
 .save-all {
