@@ -178,8 +178,9 @@ app.post("/session/stop", (req, res) => {
 
   let content = `=== SESSION CAISSE ===\n`;
   content += `Date: ${new Date().toLocaleString()}\n\n`;
-  content += `Nombre de ventes: ${sessionStats.totalSales}\n`;
+  content += `Nombre de commande: ${sessionStats.totalSales}\n`;
   content += `Total: ${sessionStats.totalAmount.toFixed(2)} €\n\n`;
+
   content += `--- Détail produits ---\n`;
 
   for (const name in sessionStats.products) {
@@ -188,7 +189,16 @@ app.post("/session/stop", (req, res) => {
 
   content += `\n======================`;
 
-  res.json({ content });
+  const filename = `session_${Date.now()}.txt`;
+
+  fs.writeFileSync(filename, content);
+
+  res.json({ file: filename });
+});
+
+// ✅ AJOUT ICI
+app.get("/session/status", (req, res) => {
+  res.json({ active: sessionActive });
 });
 
 
