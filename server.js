@@ -1,7 +1,6 @@
 const Database = require("better-sqlite3");
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 
 const ADMIN_PASSWORD = "Louka45";
 
@@ -60,7 +59,6 @@ app.get("/products", (req, res) => {
   res.json(rows);
 });
 
-
 // ADD produit
 app.post("/products", (req, res) => {
   const password = req.headers["x-admin-password"];
@@ -89,7 +87,6 @@ app.post("/products", (req, res) => {
   }
 });
 
-
 // UPDATE produit
 app.put("/products/:id", (req, res) => {
   const password = req.headers["x-admin-password"];
@@ -100,13 +97,9 @@ app.put("/products/:id", (req, res) => {
 
     let finalOut;
 
-    if (out_of_stock) {
-      finalOut = 1;
-    } else if (stock <= 0) {
-      finalOut = 1;
-    } else {
-      finalOut = 0;
-    }
+    if (out_of_stock) finalOut = 1;
+    else if (stock <= 0) finalOut = 1;
+    else finalOut = 0;
 
     db.prepare(`
       UPDATE products 
@@ -129,7 +122,6 @@ app.put("/products/:id", (req, res) => {
   }
 });
 
-
 // DELETE
 app.delete("/products/:id", (req, res) => {
   const password = req.headers["x-admin-password"];
@@ -144,7 +136,6 @@ app.delete("/products/:id", (req, res) => {
   }
 });
 
-
 // LOGIN
 app.post("/admin/login", (req, res) => {
   const { password } = req.body;
@@ -156,10 +147,9 @@ app.post("/admin/login", (req, res) => {
   }
 });
 
+// ===== SESSION =====
 
-// ===== SESSION ROUTES =====
-
-// START SESSION
+// START
 app.post("/session/start", (req, res) => {
   sessionActive = true;
 
@@ -172,35 +162,18 @@ app.post("/session/start", (req, res) => {
   res.sendStatus(200);
 });
 
-// STOP SESSION + EXPORT
+// STOP (propre)
 app.post("/session/stop", (req, res) => {
   sessionActive = false;
-
-  let content = `=== SESSION CAISSE ===\n`;
-  content += `Date: ${new Date().toLocaleString()}\n\n`;
-  content += `Nombre de commande: ${sessionStats.totalSales}\n`;
-  content += `Total: ${sessionStats.totalAmount.toFixed(2)} €\n\n`;
-
-  content += `--- Détail produits ---\n`;
-
-  for (const name in sessionStats.products) {
-    content += `${name}: ${sessionStats.products[name]} vendus\n`;
-  }
-
-  content += `\n======================`;
-
-  const filename = `session_${Date.now()}.txt`;
-
-  fs.writeFileSync(filename, content);
-
-  res.json({ file: filename });
+  res.json({ success: true });
 });
 
-// ✅ AJOUT ICI
+// STATUS
 app.get("/session/status", (req, res) => {
   res.json({ active: sessionActive });
 });
 
+// EXPORT
 app.get("/session/export", (req, res) => {
 
   let content = `=== SESSION CAISSE ===\n`;
@@ -225,12 +198,8 @@ app.post("/sales", (req, res) => {
   const { total, payment, items } = req.body;
 
   const getProduct = db.prepare("SELECT stock, out_of_stock FROM products WHERE id = ?");
-  const updateStock = db.prepare(
-    "UPDATE products SET stock=?, out_of_stock=? WHERE id=?"
-  );
-  const insertSale = db.prepare(
-    "INSERT INTO sales (total, payment) VALUES (?, ?)"
-  );
+  const updateStock = db.prepare("UPDATE products SET stock=?, out_of_stock=? WHERE id=?");
+  const insertSale = db.prepare("INSERT INTO sales (total, payment) VALUES (?, ?)");
 
   const transaction = db.transaction(() => {
 
@@ -248,16 +217,15 @@ app.post("/sales", (req, res) => {
     // SAVE SALE
     insertSale.run(total, payment);
 
-    // 🔥 SESSION TRACKING
+    // SESSION TRACKING
     if (sessionActive) {
       sessionStats.totalSales += 1;
-      sessionStats.totalAmount += Number(total);
+      sessionStats.totalAmount += parseFloat(total) || 0;
 
       for (const item of items) {
         if (!sessionStats.products[item.name]) {
           sessionStats.products[item.name] = 0;
         }
-
         sessionStats.products[item.name] += item.qty;
       }
     }
@@ -283,7 +251,6 @@ app.post("/sales", (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
 
 // ===== START =====
 const PORT = process.env.PORT || 3000;
