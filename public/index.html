@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Caisse Septors</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="manifest" href="/manifest.json">
+</head>
+
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-inner">
+
+      <div class="header-left">
+        <img src="logo.png" class="logo">
+      </div>
+
+      <div class="header-title">
+        Septors - Caisse Buvette
+      </div>
+
+      <div class="gear-container" ref="menuContainer">
+        <div class="gear" @click="toggleMenu">⚙️</div>
+
+        <div v-if="showMenu" class="admin-menu">
+          <button @click="goConfig">Configuration</button>
+          <button @click="refreshPage">🔄 Rafraîchir</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CONTENU -->
+  <div class="container">
+
+    <!-- PRODUITS -->
+    <div class="products">
+      <div v-for="p in products"
+           class="product"
+           :class="{
+              out: p.out_of_stock || p.stock <= 0,
+              low: p.stock > 0 && p.stock <= 10
+            }"
+           @click="addToCart(p)">
+
+        <h3>{{ getIcon(p.category) }} {{ p.name }}</h3>
+        <p>{{ p.price }} €</p>
+        <div class="stock">Stock : {{ p.stock }}</div>
+
+        <div class="qty" v-if="cartItem(p)">
+          x{{ cartItem(p).qty }}
+        </div>
+      </div>
+    </div>
+
+    <!-- PANIER -->
+    <div class="cart">
+
+      <div class="cart-header">
+        <h2>Panier</h2>
+
+        <button v-if="cart.length > 0"
+                class="edit-btn"
+                @click="editMode = !editMode">
+          {{ editMode ? "✔️" : "✏️" }}
+        </button>
+      </div>
+
+      <!-- LISTE -->
+      <div class="cart-items">
+        <div v-for="item in cart" class="cart-item">
+
+          <div>{{ item.name }}</div>
+
+          <div class="cart-controls">
+            <button v-if="editMode" @click="removeFromCart(item)">➖</button>
+            <span>x{{ item.qty }}</span>
+            <button v-if="editMode" @click="addToCart(item)">➕</button>
+          </div>
+
+          <span>{{ (item.price * item.qty).toFixed(2) }} €</span>
+
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="cart-footer">
+
+        <!-- ancien prix -->
+        <div v-if="discount" class="old-total">
+          <s>{{ originalTotal }} €</s>
+        </div>
+
+        <div class="total">Total : {{ total }} €</div>
+
+        <button v-if="cart.length > 0"
+                class="clear"
+                @click="clearCart">
+          🗑️ Vider le panier
+        </button>
+
+        <!-- REMISE -->
+        <button class="discount"
+                :class="{ active: discount }"
+                @click="toggleDiscount">
+          🏷️ -10%
+        </button>
+
+        <button class="card" @click="pay('card')">💳 Carte</button>
+
+        <!-- ESPÈCES -->
+        <button v-if="!showCashInput"
+                class="cash"
+                @click="payCash">
+          💵 Espèces
+        </button>
+
+        <div v-else class="cash-input-box">
+          <input
+            v-model.number="cashAmount"
+            type="number"
+            inputmode="numeric"
+            placeholder="Montant reçu"
+            autofocus
+          />
+          <button @click="confirmCash">OK</button>
+          <button @click="cancelCash">❌</button>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      products: [],
+      cart: [],
+      showMenu: false,
+      editMode: false,
+      showCashInput: false,
+      cashAmount: null,
+      discount: false
+    }
+  },
+
+  computed: {
+
+    originalTotal() {
+      return this.cart.reduce((s, i) => s + i.price * i.qty, 0).toFixed(2);
+    },
+
+    total() {
+      let t = this.cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+      if (this.discount) {
+        t = t * 0.9;
+      }
+
+      return t.toFixed(2);
+    }
+
+  },
+
+  methods: {
+
+    async loadProducts() {
+      const res = await fetch("/products");
+      const data = await res.json();
+
+      this.products = data.map(p => ({
+        ...p,
+        stock: Number(p.stock),
+        price: Number(p.price)
+      }));
+    },
+
+    getIcon(cat){
+      switch(cat){
+        case "drink": return "🥤";
+        case "food": return "🍔";
+        case "candy": return "🍬";
+        case "snack": return "🥨";
+        default: return "📦";
+      }
+    },
+
+    toggleDiscount(){
+      this.discount = !this.discount;
+    },
+
+    cartItem(p) {
+      return this.cart.find(c => c.id === p.id);
+    },
+
+    clearCart() {
+      if (!confirm("Vider le panier ?")) return;
+      this.cart = [];
+      this.discount = false;
+    },
+
+    addToCart(p) {
+      if (p.out_of_stock || p.stock <= 0) return;
+
+      const e = this.cart.find(i => i.id === p.id);
+      e ? e.qty++ : this.cart.push({ ...p, qty: 1 });
+    },
+
+    removeFromCart(p) {
+      const e = this.cart.find(i => i.id === p.id);
+      if (!e) return;
+
+      e.qty--;
+      if (e.qty <= 0) {
+        this.cart = this.cart.filter(i => i.id !== p.id);
+      }
+    },
+
+    async pay(type) {
+      if (!this.cart.length) return;
+
+      if (type === "card" && !confirm("Paiement CB effectué ?")) return;
+
+      const res = await fetch("/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          total: this.total,
+          payment: type,
+          items: this.cart
+        })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert("⚠️ " + data.error);
+
+        await this.loadProducts();
+
+        this.cart = this.cart.map(item => {
+          const real = this.products.find(p => p.id === item.id);
+          if (!real) return null;
+
+          if (item.qty > real.stock) {
+            return { ...item, qty: real.stock };
+          }
+
+          return item;
+        }).filter(i => i && i.qty > 0);
+
+        return;
+      }
+
+      this.cart = [];
+      this.discount = false;
+      location.reload();
+    },
+
+    payCash() {
+      this.showCashInput = true;
+    },
+
+    async confirmCash() {
+      if (!this.cashAmount) return;
+
+      alert("Rendu : " + (this.cashAmount - this.total).toFixed(2) + " €");
+
+      this.showCashInput = false;
+      this.cashAmount = null;
+
+      this.pay("cash");
+    },
+
+    cancelCash() {
+      this.showCashInput = false;
+      this.cashAmount = null;
+    },
+
+    refreshPage() {
+      location.reload();
+    },
+
+    toggleMenu(e) {
+      e.stopPropagation();
+      this.showMenu = !this.showMenu;
+    },
+
+    handleClickOutside(e) {
+      if (!this.$refs.menuContainer.contains(e.target)) {
+        this.showMenu = false;
+      }
+    },
+
+    async goConfig() {
+      const pwd = prompt("Mot de passe admin ?");
+      if (!pwd) return;
+
+      const res = await fetch("/admin/login", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ password: pwd })
+      });
+
+      if (res.ok) {
+        window.location.href = "/admin.html?pwd=" + pwd;
+      } else {
+        alert("Mot de passe incorrect");
+      }
+    }
+
+  },
+
+  mounted() {
+    this.loadProducts();
+    document.addEventListener("click", this.handleClickOutside);
+  }
+
+}).mount("#app");
+</script>
+
+</body>
+</html>
