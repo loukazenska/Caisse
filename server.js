@@ -201,6 +201,24 @@ app.get("/session/status", (req, res) => {
   res.json({ active: sessionActive });
 });
 
+app.get("/session/export", (req, res) => {
+
+  let content = `=== SESSION CAISSE ===\n`;
+  content += `Date: ${new Date().toLocaleString()}\n\n`;
+  content += `Nombre de ventes: ${sessionStats.totalSales}\n`;
+  content += `Total: ${sessionStats.totalAmount.toFixed(2)} €\n\n`;
+  content += `--- Détail produits ---\n`;
+
+  for (const name in sessionStats.products) {
+    content += `${name}: ${sessionStats.products[name]} vendus\n`;
+  }
+
+  content += `\n======================`;
+
+  res.setHeader("Content-Type", "text/plain");
+  res.setHeader("Content-Disposition", "attachment; filename=rapport.txt");
+  res.send(content);
+});
 
 // ===== SALES =====
 app.post("/sales", (req, res) => {
