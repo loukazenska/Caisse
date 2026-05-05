@@ -388,9 +388,7 @@ button {
 }
 
 .admin-actions button {
-  flex: 1;
-  padding: 14px;
-  border-radius: 12px;
+  white-space: nowrap;
 }
 
 .save-all {
